@@ -67,7 +67,7 @@ def approve_action(incident_id: str, req: ApprovalRequest):
     action_name = updated.get("recommended_action")
 
     return IncidentDetailResponse(
-        id=updated["id"],
+        id=str(updated["id"]),
         external_id=updated.get("external_id"),
         title=updated["title"],
         description=updated["description"],
@@ -75,7 +75,7 @@ def approve_action(incident_id: str, req: ApprovalRequest):
         severity=updated.get("severity"),
         status=IncidentStatus(updated["status"]),
         root_cause_hypothesis=updated.get("root_cause_hypothesis"),
-        confidence=updated.get("confidence"),
+        confidence=float(updated["confidence"]) if updated.get("confidence") is not None else None,
         recommended_action=action_name,
         action_risk=get_action_policy(action_name or "").get("risk") if action_name else None,
         approval_required=False,
@@ -136,7 +136,7 @@ def reject_action(incident_id: str, req: RejectionRequest):
     action_name = updated.get("recommended_action")
 
     return IncidentDetailResponse(
-        id=updated["id"],
+        id=str(updated["id"]),
         external_id=updated.get("external_id"),
         title=updated["title"],
         description=updated["description"],
@@ -144,7 +144,7 @@ def reject_action(incident_id: str, req: RejectionRequest):
         severity=updated.get("severity"),
         status=IncidentStatus(updated["status"]),
         root_cause_hypothesis=updated.get("root_cause_hypothesis"),
-        confidence=updated.get("confidence"),
+        confidence=float(updated["confidence"]) if updated.get("confidence") is not None else None,
         recommended_action=action_name,
         action_risk=get_action_policy(action_name or "").get("risk") if action_name else None,
         approval_required=False,

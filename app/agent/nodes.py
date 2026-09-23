@@ -140,16 +140,21 @@ def analyze_incident_node(state: IncidentState) -> Dict[str, Any]:
     _log_step(inc_id, "analysis", "Synthesizing evidence and generating root cause hypothesis")
 
     # Attempt LLM structured inference if API key is provided
-    analysis: IncidentAnalysisOutput = None
+    analysis: Optional[IncidentAnalysisOutput] = None
     if settings.GEMINI_API_KEY:
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
             from langchain_core.messages import SystemMessage, HumanMessage
 
+            model_name = settings.GEMINI_MODEL or "gemini-2.0-flash"
+            if model_name == "gemini-3.6-flash":
+                model_name = "gemini-2.0-flash"
+
             llm = ChatGoogleGenerativeAI(
-                model=settings.GEMINI_MODEL,
+                model=model_name,
                 temperature=settings.LLM_TEMPERATURE,
-                google_api_key=settings.GEMINI_API_KEY
+                google_api_key=settings.GEMINI_API_KEY,
+                max_retries=1
             )
             structured_llm = llm.with_structured_output(IncidentAnalysisOutput)
 
@@ -176,8 +181,13 @@ def analyze_incident_node(state: IncidentState) -> Dict[str, Any]:
             ])
             if isinstance(response, IncidentAnalysisOutput):
                 analysis = response
+            elif isinstance(response, dict):
+                analysis = IncidentAnalysisOutput(**response)
         except Exception as e:
-            logger.warning(f"Gemini LLM inference encountered error: {e}. Utilizing deterministic fallback analysis.")
+            logger.error(f"Gemini LLM inference error: {e}")
+            if settings.APP_ENV == "production":
+                raise RuntimeError(f"Gemini LLM analysis failed in production: {e}") from e
+            logger.warning("Utilizing deterministic fallback analysis for non-production environment.")
 
     # Resilient deterministic fallback analysis for testing or offline environments
     if analysis is None:

@@ -28,6 +28,24 @@ def test_api_create_incident(client: TestClient):
     assert data["status"] in ("INVESTIGATING", "AWAITING_APPROVAL")
 
 
+def test_api_create_incident_idempotent_external_id(client: TestClient):
+    """Verify POST /api/v1/incidents with existing external_id returns 201 and existing incident."""
+    payload = {
+        "title": "Authentication timeout",
+        "description": "Users are receiving 504 errors.",
+        "service": "auth",
+        "external_id": "ext-test-12345"
+    }
+    first_resp = client.post("/api/v1/incidents", json=payload)
+    assert first_resp.status_code == 201
+    first_id = first_resp.json()["incident_id"]
+
+    second_resp = client.post("/api/v1/incidents", json=payload)
+    assert second_resp.status_code == 201
+    second_id = second_resp.json()["incident_id"]
+    assert first_id == second_id
+
+
 def test_api_get_incident_detail(client: TestClient):
     """Verify GET /api/v1/incidents/{id} returns comprehensive incident details."""
     # Create incident first

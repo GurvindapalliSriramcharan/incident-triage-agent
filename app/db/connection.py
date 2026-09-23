@@ -27,13 +27,18 @@ def get_db_pool() -> Optional[ConnectionPool]:
         return None
 
     try:
-        # Initialize connection pool with dict_row factory
+        # Initialize connection pool with dict_row factory and disable prepared statements for PgBouncer / Supabase
         _pool = ConnectionPool(
             conninfo=db_url,
             min_size=1,
             max_size=10,
             timeout=10.0,
-            kwargs={"row_factory": dict_row, "autocommit": True}
+            open=True,
+            kwargs={
+                "row_factory": dict_row,
+                "autocommit": True,
+                "prepare_threshold": None
+            }
         )
         logger.info("PostgreSQL connection pool initialized successfully.")
         return _pool

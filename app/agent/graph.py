@@ -2,6 +2,8 @@ import logging
 from typing import Any, Dict, Optional
 import psycopg
 from psycopg.rows import dict_row
+import psycopg_pool
+from psycopg_pool import ConnectionPool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -35,27 +37,41 @@ logger = logging.getLogger(__name__)
 
 _memory_saver = MemorySaver()
 _postgres_saver: Optional[PostgresSaver] = None
+_checkpointer_pool: Optional[psycopg_pool.ConnectionPool] = None
 _compiled_graph = None
 
 
 def get_checkpointer() -> BaseCheckpointSaver:
     """
     Get or initialize the persistent checkpointer.
-    Uses PostgreSQL-backed PostgresSaver when DATABASE_URL is configured,
-    and falls back to MemorySaver for testing or offline execution.
+    Uses PostgreSQL-backed PostgresSaver backed by a ConnectionPool with prepare_threshold=None
+    for complete compatibility with Supabase, PgBouncer, and Render.
+    Falls back to MemorySaver for testing or offline execution.
     """
-    global _postgres_saver
+    global _postgres_saver, _checkpointer_pool
     if _postgres_saver is not None:
         return _postgres_saver
 
     db_url = settings.DATABASE_URL
     if db_url:
         try:
-            conn = psycopg.connect(db_url, autocommit=True, row_factory=dict_row)
-            saver = PostgresSaver(conn)
+            import psycopg_pool
+            _checkpointer_pool = psycopg_pool.ConnectionPool(
+                conninfo=db_url,
+                min_size=1,
+                max_size=10,
+                timeout=10.0,
+                open=True,
+                kwargs={
+                    "row_factory": dict_row,
+                    "autocommit": True,
+                    "prepare_threshold": None
+                }
+            )
+            saver = PostgresSaver(_checkpointer_pool)
             saver.setup()
             _postgres_saver = saver
-            logger.info("LangGraph persistent PostgresSaver initialized successfully.")
+            logger.info("LangGraph persistent PostgresSaver initialized successfully with ConnectionPool and prepare_threshold=None.")
             return _postgres_saver
         except Exception as e:
             logger.warning(f"Failed to initialize PostgresSaver: {e}. Falling back to MemorySaver.")

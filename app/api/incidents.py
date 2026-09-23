@@ -32,6 +32,16 @@ def create_incident(req: IncidentCreateRequest):
     RAG runbook lookup, LLM diagnosis, and remediation planning.
     """
     try:
+        # Check idempotency: if an incident with this external_id already exists, return it
+        if req.external_id:
+            existing = IncidentRepository.get_by_external_id(req.external_id)
+            if existing:
+                logger.info(f"Incident with external_id '{req.external_id}' already exists: {existing['id']}. Returning existing record.")
+                return IncidentCreateResponse(
+                    incident_id=str(existing["id"]),
+                    status=IncidentStatus(existing["status"])
+                )
+
         # Create incident record in database
         incident = IncidentRepository.create(
             title=req.title,
@@ -41,7 +51,7 @@ def create_incident(req: IncidentCreateRequest):
             external_id=req.external_id,
             status="OPEN"
         )
-        incident_id = incident["id"]
+        incident_id = str(incident["id"])
 
         # Record initial incident creation event in audit trail
         IncidentEventRepository.create(
@@ -69,7 +79,7 @@ def create_incident(req: IncidentCreateRequest):
         current_status = updated.get("status", "INVESTIGATING")
 
         return IncidentCreateResponse(
-            incident_id=incident_id,
+            incident_id=str(incident_id),
             status=IncidentStatus(current_status)
         )
     except Exception as e:
@@ -114,7 +124,7 @@ def get_incident(incident_id: str):
     )
 
     return IncidentDetailResponse(
-        id=incident["id"],
+        id=str(incident["id"]),
         external_id=incident.get("external_id"),
         title=incident["title"],
         description=incident["description"],
@@ -122,7 +132,7 @@ def get_incident(incident_id: str):
         severity=incident.get("severity"),
         status=IncidentStatus(incident["status"]),
         root_cause_hypothesis=incident.get("root_cause_hypothesis"),
-        confidence=incident.get("confidence"),
+        confidence=float(incident["confidence"]) if incident.get("confidence") is not None else None,
         recommended_action=action_name,
         action_risk=get_action_policy(action_name or "").get("risk") if action_name else None,
         approval_required=approval_required,
@@ -150,8 +160,8 @@ def get_incident_events(incident_id: str):
     events = IncidentEventRepository.get_by_incident(incident_id)
     return [
         IncidentEventResponse(
-            id=e["id"],
-            incident_id=e["incident_id"],
+            id=str(e["id"]),
+            incident_id=str(e["incident_id"]),
             event_type=e["event_type"],
             message=e["message"],
             metadata=e["metadata"] if isinstance(e["metadata"], dict) else {},

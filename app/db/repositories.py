@@ -86,6 +86,26 @@ class IncidentRepository:
         return _in_memory_incidents.get(incident_id)
 
     @staticmethod
+    def get_by_external_id(external_id: str) -> Optional[Dict[str, Any]]:
+        if not external_id:
+            return None
+        with get_db_connection() as conn:
+            if conn is not None:
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute("SELECT * FROM incidents WHERE external_id = %s ORDER BY created_at DESC LIMIT 1;", (external_id,))
+                        row = cur.fetchone()
+                        if row:
+                            return dict(row)
+                except Exception as e:
+                    logger.error(f"Error fetching incident by external_id {external_id}: {e}")
+
+        for inc in _in_memory_incidents.values():
+            if inc.get("external_id") == external_id:
+                return inc
+        return None
+
+    @staticmethod
     def update(incident_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         now = datetime.now(timezone.utc)
         updates["updated_at"] = now

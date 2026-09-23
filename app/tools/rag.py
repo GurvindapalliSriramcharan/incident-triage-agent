@@ -26,35 +26,45 @@ def get_embeddings_client():
 
     try:
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        # Adapt legacy or deprecated model names to active Gemini embedding model
+        model_name = settings.GEMINI_EMBEDDING_MODEL
+        if "text-embedding-004" in model_name:
+            model_name = "models/gemini-embedding-001"
+
         _embeddings_client = GoogleGenerativeAIEmbeddings(
-            model=settings.GEMINI_EMBEDDING_MODEL,
-            google_api_key=api_key
+            model=model_name,
+            google_api_key=api_key,
+            output_dimensionality=768,
+            max_retries=1
         )
+        logger.info(f"Initialized GoogleGenerativeAIEmbeddings with model: {model_name} (768 dimensions)")
         return _embeddings_client
     except Exception as e:
-        logger.warning(f"Could not initialize GoogleGenerativeAIEmbeddings: {e}. Falling back to offline embeddings.")
+        logger.error(f"Could not initialize GoogleGenerativeAIEmbeddings: {e}")
         return None
 
 
 def generate_embedding(text: str) -> List[float]:
     """
     Generate a 768-dimensional embedding vector for the given text.
-    Uses Gemini text-embedding-004 when configured, with deterministic fallback for offline/test environments.
+    Uses Gemini embeddings when configured. In production, raises on failure rather than faking.
     """
     client = get_embeddings_client()
     if client is not None:
         try:
             vector = client.embed_query(text)
-            # Ensure it is 768 dimensions
             if len(vector) > 768:
                 return vector[:768]
             elif len(vector) < 768:
                 return vector + [0.0] * (768 - len(vector))
             return vector
         except Exception as e:
-            logger.warning(f"Error querying Gemini embeddings API: {e}. Falling back to deterministic embedding.")
+            logger.error(f"Gemini embeddings API call failed: {e}")
+            if settings.APP_ENV == "production":
+                raise RuntimeError(f"Gemini embeddings service failure in production: {e}") from e
+            logger.warning("Falling back to deterministic offline embedding for non-production environment.")
 
-    # Deterministic fallback embedding generation for offline tests & environments
+    # Fallback embedding generation for offline tests & environments where GEMINI_API_KEY is not set
     return _generate_deterministic_vector(text, dim=768)
 
 

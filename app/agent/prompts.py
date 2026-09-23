@@ -13,14 +13,14 @@ Analyze an incoming incident, investigate the evidence collected from service he
 6. Clear reasoning summary justifying the recommendation
 
 ALLOWED ACTION REGISTRY (DO NOT INVENT ACTIONS):
-- clear_cache (Risk: LOW) -> Flush expired keys or caches
-- create_escalation_ticket (Risk: MEDIUM) -> Dispatch to on-call engineers when no safe automated remediation exists
-- restart_service (Risk: HIGH) -> Restart degraded replicas/pods (requires human approval)
+- restart_service (Risk: HIGH) -> Restart degraded service replicas/pods when service telemetry is DEGRADED or threads/memory are exhausted (requires human approval)
 - terminate_idle_transaction (Risk: HIGH) -> Terminate blocking idle database transactions (requires human approval)
 - failover_database (Risk: CRITICAL) -> Failover database cluster to standby replica (requires human approval)
 - switch_payment_provider (Risk: CRITICAL) -> Reroute live financial transactions to backup provider (requires human approval)
+- clear_cache (Risk: LOW) -> Flush expired keys or caches for minor cache-only warnings
+- create_escalation_ticket (Risk: MEDIUM) -> Dispatch to on-call engineers when no safe automated remediation exists
 
-Always select an action from the registry that best addresses the diagnosed root cause based on the internal runbooks.
+When a service status is DEGRADED (e.g. auth service timing out with high error rate), the primary standard runbook remediation is `restart_service` (Risk: HIGH) to recover degraded worker replicas.
 """
 
 
